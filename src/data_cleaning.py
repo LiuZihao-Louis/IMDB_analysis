@@ -129,6 +129,7 @@ def add_group_column(series: pd.Series, labels: list[str]) -> pd.Series:
 def clean_movies_metadata(
     csv_path: str | Path,
     output_path: str | Path | None = None,
+    financial_output_path: str | Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """Clean ``movies_metadata.csv`` and return main + financial datasets.
 
@@ -215,13 +216,22 @@ def clean_movies_metadata(
 
     if "vote_average" in df.columns:
         df["rating_group"] = add_group_column(df["vote_average"], ["Low", "Medium", "High"])
+        if not financial_df.empty:
+            financial_df["rating_group"] = df.loc[financial_df.index, "rating_group"]
     else:
         df["rating_group"] = pd.NA
+        if not financial_df.empty:
+            financial_df["rating_group"] = pd.NA
 
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False)
+
+    if financial_output_path is not None:
+        financial_output_path = Path(financial_output_path)
+        financial_output_path.parent.mkdir(parents=True, exist_ok=True)
+        financial_df.to_csv(financial_output_path, index=False)
 
     key_missing_after = {
         column: int(df[column].isna().sum()) for column in KEY_COLUMNS if column in df.columns

@@ -54,6 +54,7 @@ This Step 1 analysis studies **what factors are associated with movie success** 
 - Malformed rows removed: 3
 - Duplicate rows removed: 30
 - Rows in valid financial dataset after cleaning: 5,375
+- Financial-analysis subset saved to: `outputs/financial_movies.csv`
 - Zero or negative budget/revenue values were not treated as true financial values.
 - Non-financial analysis keeps as many valid movie rows as possible.
 

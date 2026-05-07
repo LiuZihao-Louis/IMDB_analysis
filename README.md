@@ -76,6 +76,7 @@ The notebook is designed to run from top to bottom. It automatically creates req
 ## Generated Outputs
 
 - `outputs/cleaned_movies.csv`: cleaned movie-level metadata for Step 1 analysis
+- `outputs/financial_movies.csv`: financial-analysis subset where budget and revenue are both positive
 - `outputs/data_analysis_summary.md`: presentation-friendly written summary
 - `outputs/figures/`: all generated visualization files
 
