@@ -25,7 +25,7 @@ The dataset package contains several CSV files under `data/`:
 - `ratings.csv`
 - `ratings_small.csv`
 
-Step 1 uses `movies_metadata.csv` as the main analysis dataset. The other CSV files are only listed in the dataset inventory and are not merged into the analysis.
+Step 1 uses `movies_metadata.csv` as the main analysis dataset. The other CSV files are only listed in the dataset inventory and are not merged into the analysis. They are not ignored; files such as `credits.csv`, `keywords.csv`, and `ratings_small.csv` are reserved for later project extensions such as machine learning and recommendation-system work.
 
 ## Folder Structure
 
@@ -78,7 +78,7 @@ The notebook is designed to run from top to bottom. It automatically creates req
 - `outputs/cleaned_movies.csv`: cleaned movie-level metadata for Step 1 analysis
 - `outputs/financial_movies.csv`: financial-analysis subset where budget and revenue are both positive
 - `outputs/data_analysis_summary.md`: presentation-friendly written summary
-- `outputs/figures/`: all generated visualization files
+- `outputs/figures/`: all generated visualization files, including the missing-value data quality chart
 
 ## Analysis Modules
 
@@ -88,7 +88,7 @@ Uses only movies with valid positive budget and revenue. It studies whether high
 
 ### 2. Genre Performance Analysis
 
-Uses `main_genre` extracted from the metadata genre list. It compares average revenue, rating, and ROI across genres while filtering out genres with too few samples.
+Uses `main_genre` extracted from the metadata genre list. It compares average revenue, average rating, median ROI, and ROI distribution across genres while filtering out genres with too few samples.
 
 ### 3. Audience Response Analysis
 

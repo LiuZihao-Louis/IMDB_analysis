@@ -291,7 +291,7 @@ def format_inventory_markdown(inventory: dict[str, Any]) -> str:
         "",
         f"- Detected CSV files: {', '.join(inventory['csv_files'])}",
         f"- `movies_metadata.csv` shape: {inventory['movies_shape'][0]:,} rows x {inventory['movies_shape'][1]:,} columns",
-        f"- Duplicate movie count based on numeric id: {inventory['duplicate_movie_count']:,}",
+        f"- Rows belonging to duplicated movie-id groups: {inventory['duplicate_movie_count']:,}",
         f"- Invalid budget rows for financial analysis: {inventory['invalid_budget_rows']:,}",
         f"- Invalid revenue rows for financial analysis: {inventory['invalid_revenue_rows']:,}",
         f"- Rows usable for financial analysis: {inventory['financial_analysis_rows']:,}",

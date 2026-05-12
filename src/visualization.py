@@ -206,6 +206,7 @@ def genre_metric_table(
     *,
     min_count: int = 100,
     top_n: int = 10,
+    metric: str = "mean",
 ) -> pd.DataFrame:
     if not required_columns_available(df, ["main_genre", value_col]):
         return pd.DataFrame()
@@ -213,12 +214,42 @@ def genre_metric_table(
     grouped = (
         df.dropna(subset=["main_genre", value_col])
         .groupby("main_genre")
-        .agg(movie_count=(value_col, "size"), value=(value_col, "mean"))
+        .agg(movie_count=(value_col, "size"), value=(value_col, metric))
         .reset_index()
     )
     grouped = grouped[grouped["movie_count"] >= min_count]
     grouped = grouped.sort_values("value", ascending=False).head(top_n)
     return grouped.rename(columns={"value": value_col})
+
+
+def plot_missing_values(
+    missing_values: dict[str, int] | pd.Series,
+    output_dir: str | Path = "outputs/figures",
+) -> str | None:
+    """Plot missing value counts for key columns."""
+
+    if isinstance(missing_values, dict):
+        plot_df = pd.DataFrame(
+            {"column": list(missing_values.keys()), "missing_count": list(missing_values.values())}
+        )
+    else:
+        plot_df = missing_values.rename("missing_count").reset_index().rename(columns={"index": "column"})
+
+    if plot_df.empty:
+        return None
+
+    plot_df["missing_count"] = pd.to_numeric(plot_df["missing_count"], errors="coerce").fillna(0)
+    plot_df = plot_df.sort_values("missing_count", ascending=False)
+
+    setup_style()
+    plt.figure(figsize=(9, 5.5))
+    palette = sns.color_palette("deep", n_colors=len(plot_df))
+    sns.barplot(data=plot_df, x="column", y="missing_count", hue="column", palette=palette, legend=False)
+    plt.title("Missing Values in Key Columns")
+    plt.xlabel("Key column")
+    plt.ylabel("Missing row count")
+    plt.xticks(rotation=35, ha="right")
+    return save_current_figure(ensure_figures_dir(output_dir) / "missing_values.png")
 
 
 def plot_revenue_by_genre(financial_df: pd.DataFrame, output_dir: str | Path = "outputs/figures") -> str | None:
@@ -248,16 +279,52 @@ def plot_rating_by_genre(df: pd.DataFrame, output_dir: str | Path = "outputs/fig
 
 
 def plot_roi_by_genre(financial_df: pd.DataFrame, output_dir: str | Path = "outputs/figures") -> str | None:
-    table = genre_metric_table(financial_df, "roi", min_count=30, top_n=10)
+    table = genre_metric_table(financial_df, "roi", min_count=30, top_n=10, metric="median")
     return plot_bar(
         table,
         "main_genre",
         "roi",
-        "Average ROI by Main Genre",
+        "Median ROI by Main Genre",
         "Main genre",
-        "Average ROI",
+        "Median ROI",
         ensure_figures_dir(output_dir) / "roi_by_genre.png",
     )
+
+
+def plot_roi_boxplot_by_genre(
+    financial_df: pd.DataFrame,
+    output_dir: str | Path = "outputs/figures",
+    *,
+    min_count: int = 30,
+    top_n: int = 10,
+) -> str | None:
+    """Show ROI distributions for common genres, hiding extreme fliers."""
+
+    if not required_columns_available(financial_df, ["main_genre", "roi"]):
+        return None
+
+    counts = financial_df.dropna(subset=["main_genre", "roi"])["main_genre"].value_counts()
+    genres = counts[counts >= min_count].head(top_n).index.tolist()
+    plot_df = financial_df[financial_df["main_genre"].isin(genres)].dropna(subset=["main_genre", "roi"])
+    if plot_df.empty:
+        return None
+
+    order = (
+        plot_df.groupby("main_genre")["roi"]
+        .median()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    setup_style()
+    plt.figure(figsize=(10, 5.8))
+    sns.boxplot(data=plot_df, x="main_genre", y="roi", order=order, color=PALETTE[0], showfliers=False)
+    plt.axhline(0, color="#555555", linestyle="--", linewidth=1)
+    plt.title("ROI Distribution by Main Genre")
+    plt.xlabel("Main genre")
+    plt.ylabel("ROI (outliers hidden)")
+    plt.xticks(rotation=35, ha="right")
+    return save_current_figure(ensure_figures_dir(output_dir) / "roi_boxplot_by_genre.png")
 
 
 def plot_rating_vs_revenue(financial_df: pd.DataFrame, output_dir: str | Path = "outputs/figures") -> str | None:
@@ -419,6 +486,7 @@ def create_all_figures(
         "revenue_by_genre.png": lambda: plot_revenue_by_genre(financial_df, output_dir),
         "rating_by_genre.png": lambda: plot_rating_by_genre(cleaned_df, output_dir),
         "roi_by_genre.png": lambda: plot_roi_by_genre(financial_df, output_dir),
+        "roi_boxplot_by_genre.png": lambda: plot_roi_boxplot_by_genre(financial_df, output_dir),
         "rating_vs_revenue.png": lambda: plot_rating_vs_revenue(financial_df, output_dir),
         "vote_count_vs_revenue.png": lambda: plot_vote_count_vs_revenue(financial_df, output_dir),
         "popularity_vs_revenue.png": lambda: plot_popularity_vs_revenue(financial_df, output_dir),
