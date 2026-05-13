@@ -27,7 +27,7 @@ The dataset package contains these CSV files under `data/`:
 - `ratings.csv`
 - `ratings_small.csv`
 
-Step 1 uses `movies_metadata.csv` as the main dataset. The recommendation module additionally uses `keywords.csv` together with `movies_metadata.csv`. Ratings files are reserved for later collaborative-filtering work.
+Step 1 uses `movies_metadata.csv` as the main dataset. The recommendation module additionally uses `keywords.csv` together with movie metadata. In this workspace, `data/movies_metadata.csv` is malformed/truncated around row 2804, so the recommender automatically uses `outputs/cleaned_movies.csv`, the full Step 1 output generated from `movies_metadata.csv`, for movie metadata coverage. Ratings files are reserved for later collaborative-filtering work.
 
 ## Folder Structure
 
@@ -247,6 +247,8 @@ content = genres + overview + keywords
 ```
 
 TF-IDF converts the content text into numeric vectors, and cosine similarity ranks movies by content similarity. In Streamlit, users can choose a movie, select Top 5 / Top 10 / Top 15 recommendations, and view recommended movie title, similarity score, vote average, vote count, and main genre.
+
+The recommender checks the raw metadata file before building recommendations. If `data/movies_metadata.csv` is malformed or truncated, it falls back to `outputs/cleaned_movies.csv` so the dashboard can recommend from the full cleaned movie set instead of a partial raw file.
 
 Limitations:
 

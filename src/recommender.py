@@ -22,6 +22,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 DEFAULT_METADATA_PATH = Path("data/movies_metadata.csv")
 DEFAULT_KEYWORDS_PATH = Path("data/keywords.csv")
+DEFAULT_CLEANED_METADATA_PATH = Path("outputs/cleaned_movies.csv")
+MIN_EXPECTED_METADATA_ROWS = 10_000
 
 RECOMMENDATION_OUTPUT_COLUMNS = [
     "Recommended Movie",
@@ -43,6 +45,73 @@ def read_csv_safely(path: str | Path) -> pd.DataFrame:
         return pd.read_csv(path, low_memory=False)
     except ParserError:
         return pd.read_csv(path, engine="python", on_bad_lines="skip")
+
+
+def read_csv_with_status(path: str | Path) -> tuple[pd.DataFrame, str | None]:
+    """Read a CSV and return a warning message when malformed rows are detected."""
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Missing required file: {path}")
+
+    try:
+        return pd.read_csv(path, low_memory=False), None
+    except ParserError as exc:
+        fallback = pd.read_csv(path, engine="python", on_bad_lines="skip")
+        return fallback, f"{type(exc).__name__}: {str(exc)}"
+
+
+def load_metadata_with_fallback(
+    metadata_path: str | Path = DEFAULT_METADATA_PATH,
+    cleaned_metadata_path: str | Path = DEFAULT_CLEANED_METADATA_PATH,
+    *,
+    min_expected_rows: int = MIN_EXPECTED_METADATA_ROWS,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Load movie metadata and use cleaned Step 1 output if the raw file is truncated."""
+
+    metadata_path = Path(metadata_path)
+    cleaned_metadata_path = Path(cleaned_metadata_path)
+    if not cleaned_metadata_path.exists() and not cleaned_metadata_path.is_absolute():
+        project_candidate = metadata_path.parent.parent / cleaned_metadata_path
+        if project_candidate.exists():
+            cleaned_metadata_path = project_candidate
+
+    raw_metadata, raw_warning = read_csv_with_status(metadata_path)
+    cleaned_metadata = pd.DataFrame()
+    if cleaned_metadata_path.exists():
+        cleaned_metadata = pd.read_csv(cleaned_metadata_path, low_memory=False)
+
+    use_cleaned = (
+        not cleaned_metadata.empty
+        and (
+            raw_warning is not None
+            or (len(raw_metadata) < min_expected_rows and len(cleaned_metadata) > len(raw_metadata))
+        )
+    )
+
+    if use_cleaned:
+        reason = (
+            "The raw movies_metadata.csv file in this workspace is malformed or truncated, "
+            "so the recommender uses outputs/cleaned_movies.csv generated from movies_metadata.csv "
+            "for full movie metadata coverage."
+        )
+        metadata = cleaned_metadata
+        source = str(cleaned_metadata_path)
+    else:
+        reason = "The recommender uses the raw movies_metadata.csv file directly."
+        metadata = raw_metadata
+        source = str(metadata_path)
+
+    status = {
+        "raw_metadata_path": str(metadata_path),
+        "raw_metadata_rows_read": int(len(raw_metadata)),
+        "raw_metadata_parse_warning": raw_warning or "",
+        "cleaned_metadata_path": str(cleaned_metadata_path),
+        "cleaned_metadata_rows_available": int(len(cleaned_metadata)),
+        "metadata_source": source,
+        "metadata_source_reason": reason,
+    }
+    return metadata, status
 
 
 def parse_name_list(value: Any) -> list[str]:
@@ -90,10 +159,11 @@ def join_tokens(values: list[str]) -> str:
 def prepare_recommendation_data(
     metadata_path: str | Path = DEFAULT_METADATA_PATH,
     keywords_path: str | Path = DEFAULT_KEYWORDS_PATH,
+    cleaned_metadata_path: str | Path = DEFAULT_CLEANED_METADATA_PATH,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Load, merge, and prepare movie content for recommendation."""
 
-    metadata = read_csv_safely(metadata_path)
+    metadata, metadata_status = load_metadata_with_fallback(metadata_path, cleaned_metadata_path)
     keywords = read_csv_safely(keywords_path)
 
     required_metadata = {"id", "title", "genres", "overview"}
@@ -177,6 +247,7 @@ def prepare_recommendation_data(
     recommendation_df = recommendation_df[output_columns].sort_values("title").reset_index(drop=True)
 
     summary = {
+        **metadata_status,
         "metadata_rows_loaded": int(len(metadata)),
         "keywords_rows_loaded": int(len(keywords)),
         "recommendation_rows": int(len(recommendation_df)),
@@ -232,13 +303,14 @@ class ContentRecommender:
 def build_content_recommender(
     metadata_path: str | Path = DEFAULT_METADATA_PATH,
     keywords_path: str | Path = DEFAULT_KEYWORDS_PATH,
+    cleaned_metadata_path: str | Path = DEFAULT_CLEANED_METADATA_PATH,
     *,
     max_features: int = 30_000,
     min_df: int = 1,
 ) -> tuple[ContentRecommender, dict[str, Any]]:
     """Build a TF-IDF content recommender from metadata and keywords."""
 
-    movies, summary = prepare_recommendation_data(metadata_path, keywords_path)
+    movies, summary = prepare_recommendation_data(metadata_path, keywords_path, cleaned_metadata_path)
     vectorizer = TfidfVectorizer(
         stop_words="english",
         max_features=max_features,

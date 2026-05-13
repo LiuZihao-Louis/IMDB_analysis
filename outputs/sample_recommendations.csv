@@ -1,11 +1,11 @@
 Source Movie,Recommended Movie,Similarity Score,Vote Average,Vote Count,Main Genre
-Star Wars,The Empire Strikes Back,0.473,8.2,5998,Adventure
-Star Wars,Return of the Jedi,0.2539,7.9,4763,Adventure
-Star Wars,Star Wars: Episode I - The Phantom Menace,0.1719,6.4,4526,Adventure
-Star Wars,Mad Dog Time,0.1504,6.2,12,Drama
-Star Wars,The Swan Princess,0.1077,6.5,251,Animation
-Star Wars,Sleeping Beauty,0.0859,6.8,1332,Fantasy
-Star Wars,The Princess Bride,0.0829,7.6,1518,Adventure
-Star Wars,Star Trek: Insurrection,0.0766,6.3,402,Science Fiction
-Star Wars,The Mummy,0.0761,6.8,58,Horror
-Star Wars,History of the World: Part I,0.0678,6.5,205,Comedy
+Batman,Batman Beyond: Return of the Joker,0.4541,7.5,152,Animation
+Batman,Batman Unlimited: Monster Mayhem,0.4113,6.0,40,Action
+Batman,Batman & Robin,0.4011,4.2,1447,Action
+Batman,LEGO DC Comics Super Heroes: Justice League - Gotham City Breakout,0.3238,7.0,22,Adventure
+Batman,The Dark Knight Rises,0.3126,7.6,9263,Action
+Batman,Batman: Under the Red Hood,0.3042,7.6,459,Action
+Batman,Batman Begins,0.2812,7.5,7511,Action
+Batman,Batman: Return of the Caped Crusaders,0.2709,7.2,37,Action
+Batman,The Dark Knight,0.2702,8.3,12269,Drama
+Batman,Batman Returns,0.2625,6.6,1706,Action
