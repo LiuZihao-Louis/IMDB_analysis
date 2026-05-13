@@ -814,7 +814,7 @@ with tabs[7]:
                 )
     else:
         st.info(
-            "ML outputs are not available yet. Run `notebooks/03_success_prediction_ml.ipynb` "
+            "ML outputs are not available yet. Run `notebooks/02_success_prediction_ml.ipynb` "
             "to generate model metrics and figures."
         )
 
