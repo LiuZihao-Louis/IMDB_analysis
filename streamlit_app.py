@@ -1,10 +1,11 @@
-"""Streamlit dashboard for Step 1 IMDB data analysis results.
+"""Streamlit dashboard for IMDB data analysis and ML extension results.
 
 Run from the project root:
     streamlit run streamlit_app.py
 
-This dashboard visualizes the cleaned Step 1 outputs only. It does not include
-machine learning, recommendation-system, or LLM-related features.
+This dashboard visualizes the cleaned EDA outputs and the optional
+audience-success prediction module. It does not include recommendation-system
+or LLM-related features.
 """
 
 from __future__ import annotations
@@ -12,8 +13,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import altair as alt
+import joblib
 import pandas as pd
 import streamlit as st
+
+from src.modeling import MODEL_FEATURES, REFERENCE_YEAR
 
 alt.data_transformers.disable_max_rows()
 
@@ -26,6 +30,11 @@ FINANCIAL_PATH = OUTPUT_DIR / "financial_movies.csv"
 SUMMARY_PATH = OUTPUT_DIR / "data_analysis_summary.md"
 ML_METRICS_PATH = OUTPUT_DIR / "ml_model_metrics.csv"
 ML_SUMMARY_PATH = OUTPUT_DIR / "ml_success_prediction_summary.md"
+ML_POPULARITY_PATH = OUTPUT_DIR / "ml_popularity_comparison.csv"
+ML_THRESHOLD_PATH = OUTPUT_DIR / "ml_threshold_tuning.csv"
+ML_CV_PATH = OUTPUT_DIR / "ml_cross_validation_metrics.csv"
+ML_IMPORTANCE_PATH = OUTPUT_DIR / "ml_feature_importance.csv"
+ML_RANDOM_FOREST_PATH = OUTPUT_DIR / "models" / "random_forest.joblib"
 
 KEY_COLUMNS = [
     "id",
@@ -71,6 +80,20 @@ def load_ml_summary_text() -> str:
     return ""
 
 
+@st.cache_data(show_spinner=False)
+def load_optional_csv(path: Path) -> pd.DataFrame:
+    if path.exists():
+        return pd.read_csv(path)
+    return pd.DataFrame()
+
+
+@st.cache_resource(show_spinner=False)
+def load_random_forest_model():
+    if ML_RANDOM_FOREST_PATH.exists():
+        return joblib.load(ML_RANDOM_FOREST_PATH)
+    return None
+
+
 def money(value: float | int | None) -> str:
     if value is None or pd.isna(value):
         return "N/A"
@@ -100,6 +123,18 @@ def show_image_if_exists(filename: str, caption: str | None = None) -> None:
         st.image(str(path), caption=caption, use_container_width=True)
     else:
         st.info(f"{filename} is not available. Re-run the analysis notebook to generate it.")
+
+
+def success_probability(model, input_df: pd.DataFrame) -> float | None:
+    if model is None or not hasattr(model, "predict_proba"):
+        return None
+    probabilities = model.predict_proba(input_df[MODEL_FEATURES])
+    classes = list(getattr(model, "classes_", []))
+    if 1 in classes:
+        return float(probabilities[:, classes.index(1)][0])
+    if probabilities.shape[1] >= 2:
+        return float(probabilities[:, 1][0])
+    return None
 
 
 def filtered_data(
@@ -199,7 +234,7 @@ with st.sidebar:
     selected_genres = st.multiselect("Main genre", genre_options)
     min_vote_count = st.slider("Minimum vote count", 0, 500, 20, step=10)
     st.divider()
-    st.caption("Step 1 dashboard uses movie-level metadata only. Other CSV files are reserved for later project stages.")
+    st.caption("Dashboard uses movie-level metadata. Other CSV files remain reserved for later recommendation and richer ML extensions.")
 
 filtered_cleaned, filtered_financial = filtered_data(cleaned_movies, financial_movies, year_range, selected_genres)
 rating_filtered = filtered_cleaned[filtered_cleaned["vote_count"].fillna(0) >= min_vote_count].copy()
@@ -244,7 +279,7 @@ with tabs[0]:
     with c3:
         insight_box(
             "Scope",
-            "This is still Step 1. It presents EDA results only and does not add machine learning, recommendations, or LLM features.",
+            "The main dashboard presents Step 1 EDA results. The ML tab adds the planned audience-success prediction extension without recommendations or LLM features.",
         )
 
     st.markdown('<div class="section-title">Movie Count by Main Genre</div>', unsafe_allow_html=True)
@@ -546,29 +581,43 @@ with tabs[6]:
         This module predicts `success_movie`, defined as `vote_average >= 7.0`
         and `vote_count >= 50`. The models use metadata features only, so
         `vote_average` and `vote_count` are excluded from the feature set to avoid label leakage.
+        The label measures audience response, not direct financial success.
         """
     )
 
     if ML_METRICS_PATH.exists():
-        ml_metrics = pd.read_csv(ML_METRICS_PATH)
+        ml_metrics = load_optional_csv(ML_METRICS_PATH)
+        popularity_comparison = load_optional_csv(ML_POPULARITY_PATH)
+        threshold_table = load_optional_csv(ML_THRESHOLD_PATH)
+        cv_table = load_optional_csv(ML_CV_PATH)
+        importance_table = load_optional_csv(ML_IMPORTANCE_PATH)
+
         best_row = ml_metrics.sort_values("f1", ascending=False).iloc[0]
-        metric_cols = st.columns(5)
+        baseline_row = ml_metrics.loc[ml_metrics["model"] == "Dummy Baseline"].iloc[0]
+
+        metric_cols = st.columns(6)
         metric_cols[0].metric("Best model", best_row["model"])
         metric_cols[1].metric("Accuracy", f"{best_row['accuracy']:.3f}")
         metric_cols[2].metric("Precision", f"{best_row['precision']:.3f}")
         metric_cols[3].metric("Recall", f"{best_row['recall']:.3f}")
         metric_cols[4].metric("F1-score", f"{best_row['f1']:.3f}")
+        metric_cols[5].metric("PR-AUC", f"{best_row['pr_auc']:.3f}")
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             insight_box(
                 "Audience-success label",
-                "The label captures audience response, not direct revenue or ROI. It is useful for a first classification task because it is transparent and easy to explain.",
+                "The target is rating-and-vote based. It should not be mixed with revenue, profit, or ROI success.",
             )
         with c2:
             insight_box(
                 "Class imbalance",
-                "Successful movies are a minority under this threshold, so F1-score, precision, and recall are more informative than accuracy alone.",
+                f"The Dummy baseline gets {baseline_row['accuracy']:.3f} accuracy but zero recall and zero F1-score, so accuracy is not the main metric.",
+            )
+        with c3:
+            insight_box(
+                "Popularity boundary",
+                "Popularity is useful but may reflect post-release attention, so the model is exploratory rather than pure pre-release prediction.",
             )
 
         st.dataframe(ml_metrics.round(3), hide_index=True, use_container_width=True)
@@ -580,6 +629,92 @@ with tabs[6]:
         ):
             with image_col:
                 show_image_if_exists(image_name)
+
+        img_cols = st.columns(3)
+        for image_col, image_name in zip(
+            img_cols,
+            ["ml_popularity_comparison.png", "ml_threshold_tuning.png", "ml_cv_metrics.png"],
+        ):
+            with image_col:
+                show_image_if_exists(image_name)
+
+        with st.expander("Show supporting ML tables"):
+            if not popularity_comparison.empty:
+                st.markdown("**With vs without popularity**")
+                st.dataframe(popularity_comparison.round(3), hide_index=True, use_container_width=True)
+            if not threshold_table.empty:
+                st.markdown("**Threshold tuning**")
+                st.dataframe(threshold_table.round(3), hide_index=True, use_container_width=True)
+            if not cv_table.empty:
+                st.markdown("**Stratified 5-fold cross-validation**")
+                st.dataframe(cv_table.round(3), hide_index=True, use_container_width=True)
+            if not importance_table.empty:
+                st.markdown("**Top feature importance**")
+                st.dataframe(importance_table.round(4), hide_index=True, use_container_width=True)
+
+        st.markdown('<div class="section-title">Manual Prediction Demo</div>', unsafe_allow_html=True)
+        st.caption(
+            "This demo uses the saved Random Forest model and metadata-style inputs. It is for classroom explanation, not a production decision tool."
+        )
+        rf_model = load_random_forest_model()
+        if rf_model is None:
+            st.info("Random Forest model file is not available. Re-run the ML notebook to generate it.")
+        else:
+            language_options = (
+                cleaned_movies["original_language"]
+                .dropna()
+                .astype(str)
+                .value_counts()
+                .head(15)
+                .index.tolist()
+            )
+            if "en" not in language_options:
+                language_options.insert(0, "en")
+            genre_options_for_model = sorted(cleaned_movies["main_genre"].dropna().astype(str).unique().tolist())
+
+            input_cols = st.columns(3)
+            with input_cols[0]:
+                demo_budget = st.number_input("Budget", min_value=0, value=10_000_000, step=1_000_000)
+                demo_runtime = st.number_input("Runtime", min_value=0, max_value=300, value=100, step=5)
+            with input_cols[1]:
+                demo_popularity = st.number_input("Popularity", min_value=0.0, value=10.0, step=1.0)
+                demo_release_year = st.number_input("Release year", min_value=1900, max_value=2020, value=2010, step=1)
+            with input_cols[2]:
+                demo_language = st.selectbox("Original language", language_options, index=language_options.index("en"))
+                default_genre_index = genre_options_for_model.index("Drama") if "Drama" in genre_options_for_model else 0
+                demo_genre = st.selectbox("Main genre", genre_options_for_model, index=default_genre_index)
+
+            demo_input = pd.DataFrame(
+                [
+                    {
+                        "budget": float(demo_budget) if demo_budget > 0 else pd.NA,
+                        "runtime": float(demo_runtime) if demo_runtime > 0 else pd.NA,
+                        "popularity": float(demo_popularity),
+                        "release_year": float(demo_release_year),
+                        "has_budget": int(demo_budget > 0),
+                        "is_english": int(str(demo_language).lower() == "en"),
+                        "movie_age": max(0, REFERENCE_YEAR - int(demo_release_year)),
+                        "original_language": demo_language,
+                        "main_genre": demo_genre,
+                    }
+                ]
+            )
+
+            probability = success_probability(rf_model, demo_input)
+            threshold_choice = st.select_slider(
+                "Decision threshold",
+                options=[0.3, 0.4, 0.5, 0.6, 0.7],
+                value=0.6,
+            )
+            if probability is not None:
+                result_cols = st.columns(2)
+                result_cols[0].metric("Predicted success probability", f"{probability:.1%}")
+                prediction_label = "Audience-successful" if probability >= threshold_choice else "Not audience-successful"
+                result_cols[1].metric("Classification", prediction_label)
+                st.caption(
+                    "Using a higher threshold reduces false positives but may miss more successful movies. "
+                    "The notebook threshold tuning table explains this trade-off."
+                )
     else:
         st.info(
             "ML outputs are not available yet. Run `notebooks/03_success_prediction_ml.ipynb` "
@@ -594,8 +729,8 @@ with tabs[7]:
     st.subheader("Presentation Summary")
     st.markdown(
         """
-        This front-end is designed for presentation and discussion. It turns the Step 1 notebook outputs
-        into a navigable dashboard while keeping the project scope focused on EDA.
+        This front-end is designed for presentation and discussion. It turns the Step 1 EDA outputs
+        and the audience-success ML extension into a navigable dashboard.
         """
     )
     if summary_text:
@@ -608,5 +743,8 @@ with tabs[7]:
         {"Output": "Financial subset", "Path": "outputs/financial_movies.csv", "Exists": FINANCIAL_PATH.exists()},
         {"Output": "Summary markdown", "Path": "outputs/data_analysis_summary.md", "Exists": SUMMARY_PATH.exists()},
         {"Output": "Figures folder", "Path": "outputs/figures/", "Exists": FIGURES_DIR.exists()},
+        {"Output": "ML metrics", "Path": "outputs/ml_model_metrics.csv", "Exists": ML_METRICS_PATH.exists()},
+        {"Output": "ML summary", "Path": "outputs/ml_success_prediction_summary.md", "Exists": ML_SUMMARY_PATH.exists()},
+        {"Output": "Random Forest model", "Path": "outputs/models/random_forest.joblib", "Exists": ML_RANDOM_FOREST_PATH.exists()},
     ]
     st.dataframe(pd.DataFrame(output_rows), hide_index=True, use_container_width=True)

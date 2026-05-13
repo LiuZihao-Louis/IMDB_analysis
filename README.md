@@ -2,20 +2,21 @@
 
 ## Project Overview
 
-This repository contains Step 1 of the university Software Development Workshop II group project: data cleaning, exploratory data analysis, and visualization for the theme **"What Makes a Movie Successful?"**
+This repository supports the university Software Development Workshop II group project:
+**"What Makes a Movie Successful?"**
 
-In this step, movie success is studied from four perspectives:
+The project currently contains two connected parts:
 
-- Commercial performance
-- Investment efficiency
-- Audience response
-- Industry trend
+- **Step 1: Data cleaning, EDA, and visualization**
+- **Step 2 extension: Audience-success prediction with machine learning**
 
-Machine learning, recommendation systems, and LLM-related features are intentionally not included in Step 1.
+Step 1 studies movie success from four perspectives: commercial performance, investment efficiency, audience response, and industry trend. The ML extension then predicts whether a movie is audience-successful using the cleaned metadata.
 
-## Dataset Files Used in Step 1
+Recommendation-system and LLM-related features are not included in the current implementation.
 
-The dataset package contains several CSV files under `data/`:
+## Dataset Files Used
+
+The dataset package contains these CSV files under `data/`:
 
 - `movies_metadata.csv`
 - `credits.csv`
@@ -25,25 +26,68 @@ The dataset package contains several CSV files under `data/`:
 - `ratings.csv`
 - `ratings_small.csv`
 
-Step 1 uses `movies_metadata.csv` as the main analysis dataset. The other CSV files are only listed in the dataset inventory and are not merged into the analysis. They are not ignored; files such as `credits.csv`, `keywords.csv`, and `ratings_small.csv` are reserved for later project extensions such as machine learning and recommendation-system work.
+Step 1 uses `movies_metadata.csv` as the main dataset. Other files are listed in the dataset inventory but are not merged into the Step 1 analysis. They are reserved for later extensions such as richer machine learning and recommendation-system work.
 
 ## Folder Structure
 
 ```text
 IMDB_analysis/
-├── data/
-│   ├── movies_metadata.csv
-│   └── other dataset CSV files
-├── notebooks/
-│   └── 01_data_analysis.ipynb
-├── outputs/
-│   ├── cleaned_movies.csv
-│   ├── data_analysis_summary.md
-│   └── figures/
-├── src/
-│   ├── data_cleaning.py
-│   └── visualization.py
-└── README.md
+|-- data/
+|   |-- movies_metadata.csv
+|   |-- credits.csv
+|   |-- keywords.csv
+|   |-- links.csv
+|   |-- links_small.csv
+|   |-- ratings.csv
+|   `-- ratings_small.csv
+|-- notebooks/
+|   |-- 01_data_analysis.ipynb
+|   |-- 02_rating_and_trend.ipynb
+|   `-- 03_success_prediction_ml.ipynb
+|-- outputs/
+|   |-- cleaned_movies.csv
+|   |-- financial_movies.csv
+|   |-- data_analysis_summary.md
+|   |-- ml_model_metrics.csv
+|   |-- ml_cross_validation_metrics.csv
+|   |-- ml_feature_importance.csv
+|   |-- ml_popularity_comparison.csv
+|   |-- ml_success_prediction_summary.md
+|   |-- ml_threshold_tuning.csv
+|   |-- figures/
+|   |   |-- missing_values.png
+|   |   |-- budget_vs_revenue.png
+|   |   |-- budget_vs_profit.png
+|   |   |-- roi_by_budget_group.png
+|   |   |-- revenue_by_genre.png
+|   |   |-- rating_by_genre.png
+|   |   |-- roi_by_genre.png
+|   |   |-- roi_boxplot_by_genre.png
+|   |   |-- rating_vs_revenue.png
+|   |   |-- vote_count_vs_revenue.png
+|   |   |-- popularity_vs_revenue.png
+|   |   |-- correlation_heatmap.png
+|   |   |-- movies_by_year.png
+|   |   |-- revenue_by_year.png
+|   |   |-- budget_by_year.png
+|   |   |-- rating_by_year.png
+|   |   |-- ml_model_comparison.png
+|   |   |-- ml_confusion_matrix.png
+|   |   |-- ml_feature_importance.png
+|   |   |-- ml_popularity_comparison.png
+|   |   |-- ml_threshold_tuning.png
+|   |   `-- ml_cv_metrics.png
+|   `-- models/
+|       |-- dummy_baseline.joblib
+|       |-- logistic_regression.joblib
+|       `-- random_forest.joblib
+|-- src/
+|   |-- data_cleaning.py
+|   |-- visualization.py
+|   `-- modeling.py
+|-- streamlit_app.py
+|-- requirements.txt
+`-- README.md
 ```
 
 ## Required Python Packages
@@ -61,58 +105,85 @@ IMDB_analysis/
 - scikit-learn
 - joblib
 
-An isolated Conda environment can be created with:
-
-```powershell
-conda create --prefix .conda-env python=3.12 pandas matplotlib-base seaborn nbformat nbconvert ipykernel streamlit altair scikit-learn joblib
-```
-
-Or install the Python package dependencies from `requirements.txt`:
+Install from `requirements.txt`:
 
 ```powershell
 .conda-env\python.exe -m pip install -r requirements.txt
 ```
 
-## How to Run the Notebook
+Or create a Conda environment:
 
-From the project root:
+```powershell
+conda create --prefix .conda-env python=3.12 pandas matplotlib-base seaborn nbformat nbconvert ipykernel streamlit altair scikit-learn joblib
+```
+
+## How to Run
+
+Run Step 1 EDA:
 
 ```powershell
 .conda-env\python.exe -m nbconvert --execute --inplace notebooks\01_data_analysis.ipynb
 ```
 
-The notebook is designed to run from top to bottom. It automatically creates required output folders and regenerates the cleaned dataset, summary file, and figures.
-
-## How to Run the Machine Learning Notebook
-
-After Step 1 outputs have been generated, run:
+Run the ML extension after Step 1 outputs exist:
 
 ```powershell
 .conda-env\python.exe -m nbconvert --execute --inplace notebooks\03_success_prediction_ml.ipynb
 ```
 
-The ML notebook creates an audience-success label, trains Logistic Regression and Random Forest classifiers, and saves model metrics, trained model files, and evaluation figures.
-
-## How to Run the Streamlit Dashboard
-
-After generating the notebook outputs, run:
+Run the Streamlit dashboard:
 
 ```powershell
 .conda-env\python.exe -m streamlit run streamlit_app.py
 ```
 
-The dashboard uses the cleaned Step 1 outputs in `outputs/` and provides interactive views for data quality, commercial success, genre performance, audience response, and time trends.
+Then open:
+
+```text
+http://localhost:8501
+```
 
 ## Generated Outputs
 
-- `outputs/cleaned_movies.csv`: cleaned movie-level metadata for Step 1 analysis
-- `outputs/financial_movies.csv`: financial-analysis subset where budget and revenue are both positive
-- `outputs/data_analysis_summary.md`: presentation-friendly written summary
-- `outputs/figures/`: all generated visualization files, including the missing-value data quality chart
-- `streamlit_app.py`: Streamlit front-end for presenting the Step 1 analysis results
-- `outputs/ml_model_metrics.csv`: model evaluation metrics for the ML module
-- `outputs/ml_success_prediction_summary.md`: summary of the success-prediction module
-- `outputs/models/`: trained model files
+Step 1 outputs:
+
+- `outputs/cleaned_movies.csv`
+- `outputs/financial_movies.csv`
+- `outputs/data_analysis_summary.md`
+- `outputs/figures/missing_values.png`
+- `outputs/figures/budget_vs_revenue.png`
+- `outputs/figures/budget_vs_profit.png`
+- `outputs/figures/roi_by_budget_group.png`
+- `outputs/figures/revenue_by_genre.png`
+- `outputs/figures/rating_by_genre.png`
+- `outputs/figures/roi_by_genre.png`
+- `outputs/figures/roi_boxplot_by_genre.png`
+- `outputs/figures/rating_vs_revenue.png`
+- `outputs/figures/vote_count_vs_revenue.png`
+- `outputs/figures/popularity_vs_revenue.png`
+- `outputs/figures/correlation_heatmap.png`
+- `outputs/figures/movies_by_year.png`
+- `outputs/figures/revenue_by_year.png`
+- `outputs/figures/budget_by_year.png`
+- `outputs/figures/rating_by_year.png`
+
+ML extension outputs:
+
+- `outputs/ml_model_metrics.csv`
+- `outputs/ml_success_prediction_summary.md`
+- `outputs/ml_popularity_comparison.csv`
+- `outputs/ml_threshold_tuning.csv`
+- `outputs/ml_cross_validation_metrics.csv`
+- `outputs/ml_feature_importance.csv`
+- `outputs/models/dummy_baseline.joblib`
+- `outputs/models/logistic_regression.joblib`
+- `outputs/models/random_forest.joblib`
+- `outputs/figures/ml_model_comparison.png`
+- `outputs/figures/ml_confusion_matrix.png`
+- `outputs/figures/ml_feature_importance.png`
+- `outputs/figures/ml_popularity_comparison.png`
+- `outputs/figures/ml_threshold_tuning.png`
+- `outputs/figures/ml_cv_metrics.png`
 
 ## Analysis Modules
 
@@ -132,6 +203,19 @@ Compares audience rating, vote count, and popularity against revenue. It also in
 
 Studies movie release volume, average revenue, average budget, and average rating over time. Financial trends use only the valid financial dataset, while release count and rating trends use the cleaned main dataset.
 
-### 5. Success Prediction Machine Learning
+### 5. Audience Success Prediction
 
-Defines `success_movie` as `vote_average >= 7.0` and `vote_count >= 50`, then trains Logistic Regression and Random Forest models using metadata features only. The model excludes `vote_average` and `vote_count` from input features to avoid label leakage.
+Defines `success_movie` as `vote_average >= 7.0` and `vote_count >= 50`. The model excludes `vote_average` and `vote_count` from input features to prevent data leakage.
+
+The ML module includes:
+
+- Dummy baseline for class-imbalance comparison
+- Logistic Regression and Random Forest models
+- Accuracy, precision, recall, F1-score, ROC-AUC, and PR-AUC
+- Median imputation with missing indicators for numeric features
+- Popularity-feature comparison with and without `popularity`
+- Threshold tuning for Random Forest
+- Stratified 5-fold cross-validation
+- Feature importance and confusion matrix visualizations
+
+The current ML result should be presented as an exploratory audience-success model, not as a production-level or pure pre-release prediction system.
