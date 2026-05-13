@@ -20,7 +20,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -40,6 +40,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 TARGET_COLUMN = "success_movie"
 REFERENCE_YEAR = 2017
+SELECTED_THRESHOLD = 0.6
 
 NUMERIC_FEATURES = [
     "budget",
@@ -263,15 +264,6 @@ def build_models(
                 min_samples_leaf=3,
             )
         ),
-        "Extra Trees": model_pipeline(
-            ExtraTreesClassifier(
-                n_estimators=300,
-                random_state=random_state,
-                class_weight="balanced",
-                n_jobs=-1,
-                min_samples_leaf=3,
-            )
-        ),
     }
 
 
@@ -301,7 +293,7 @@ def evaluate_model(
     X_test: pd.DataFrame,
     y_test: pd.Series,
     *,
-    threshold: float = 0.5,
+    threshold: float = SELECTED_THRESHOLD,
 ) -> dict[str, Any]:
     """Evaluate one fitted model using threshold and probability-based metrics."""
 
@@ -344,6 +336,7 @@ def train_and_evaluate_models(
     features: Iterable[str] | None = None,
     random_state: int = 42,
     model_names: Iterable[str] | None = None,
+    threshold: float = SELECTED_THRESHOLD,
 ) -> tuple[dict[str, Pipeline], pd.DataFrame, dict[str, Any]]:
     """Fit selected models and return fitted models, metrics table, and raw details."""
 
@@ -358,7 +351,7 @@ def train_and_evaluate_models(
 
     for model_name, model in models.items():
         model.fit(X_train[selected_features], y_train)
-        metrics = evaluate_model(model, X_test[selected_features], y_test)
+        metrics = evaluate_model(model, X_test[selected_features], y_test, threshold=threshold)
         rows.append({"model": model_name, **{metric: metrics[metric] for metric in METRIC_COLUMNS}})
         details[model_name] = metrics
 
@@ -439,14 +432,31 @@ def cross_validate_model(
     *,
     cv_splits: int = 5,
     random_state: int = 42,
+    threshold: float = SELECTED_THRESHOLD,
 ) -> pd.DataFrame:
     """Run stratified cross-validation and return metric mean/std rows."""
 
     cv = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=random_state)
+
+    def threshold_predictions(estimator: Pipeline, features: pd.DataFrame) -> np.ndarray:
+        probabilities = get_positive_probabilities(estimator, features)
+        if probabilities is None:
+            return estimator.predict(features)
+        return (probabilities >= threshold).astype(int)
+
+    def precision_at_threshold(estimator: Pipeline, features: pd.DataFrame, target: pd.Series) -> float:
+        return precision_score(target, threshold_predictions(estimator, features), zero_division=0)
+
+    def recall_at_threshold(estimator: Pipeline, features: pd.DataFrame, target: pd.Series) -> float:
+        return recall_score(target, threshold_predictions(estimator, features), zero_division=0)
+
+    def f1_at_threshold(estimator: Pipeline, features: pd.DataFrame, target: pd.Series) -> float:
+        return f1_score(target, threshold_predictions(estimator, features), zero_division=0)
+
     scoring = {
-        "precision": "precision",
-        "recall": "recall",
-        "f1": "f1",
+        "precision": precision_at_threshold,
+        "recall": recall_at_threshold,
+        "f1": f1_at_threshold,
         "roc_auc": "roc_auc",
         "pr_auc": "average_precision",
     }
@@ -470,6 +480,7 @@ def cross_validate_model(
                 "mean": float(np.nanmean(values)),
                 "std": float(np.nanstd(values)),
                 "folds": cv_splits,
+                "threshold": threshold if metric in {"precision", "recall", "f1"} else np.nan,
             }
         )
     return pd.DataFrame(rows)

@@ -5,14 +5,15 @@
 This repository supports the university Software Development Workshop II group project:
 **"What Makes a Movie Successful?"**
 
-The project currently contains two connected parts:
+The project currently contains three connected parts:
 
 - **Step 1: Data cleaning, EDA, and visualization**
 - **Step 2 extension: Audience-success prediction with machine learning**
+- **Step 3 extension: Content-based movie recommendation**
 
-Step 1 studies movie success from four perspectives: commercial performance, investment efficiency, audience response, and industry trend. The ML extension then predicts whether a movie is audience-successful using the cleaned metadata.
+Step 1 studies movie success from four perspectives: commercial performance, investment efficiency, audience response, and industry trend. The ML extension predicts whether a movie is audience-successful using the cleaned metadata. The recommendation module recommends content-similar movies using genres, overview, and keywords.
 
-Recommendation-system and LLM-related features are not included in the current implementation.
+LLM-related features are not included in the current implementation.
 
 ## Dataset Files Used
 
@@ -26,7 +27,7 @@ The dataset package contains these CSV files under `data/`:
 - `ratings.csv`
 - `ratings_small.csv`
 
-Step 1 uses `movies_metadata.csv` as the main dataset. Other files are listed in the dataset inventory but are not merged into the Step 1 analysis. They are reserved for later extensions such as richer machine learning and recommendation-system work.
+Step 1 uses `movies_metadata.csv` as the main dataset. The recommendation module additionally uses `keywords.csv` together with `movies_metadata.csv`. Ratings files are reserved for later collaborative-filtering work.
 
 ## Folder Structure
 
@@ -43,7 +44,8 @@ IMDB_analysis/
 |-- notebooks/
 |   |-- 01_data_analysis.ipynb
 |   |-- 02_rating_and_trend.ipynb
-|   `-- 03_success_prediction_ml.ipynb
+|   |-- 03_success_prediction_ml.ipynb
+|   `-- 04_movie_recommendation.ipynb
 |-- outputs/
 |   |-- cleaned_movies.csv
 |   |-- financial_movies.csv
@@ -54,6 +56,8 @@ IMDB_analysis/
 |   |-- ml_popularity_comparison.csv
 |   |-- ml_success_prediction_summary.md
 |   |-- ml_threshold_tuning.csv
+|   |-- recommendation_summary.md
+|   |-- sample_recommendations.csv
 |   |-- figures/
 |   |   |-- missing_values.png
 |   |   |-- budget_vs_revenue.png
@@ -84,7 +88,8 @@ IMDB_analysis/
 |-- src/
 |   |-- data_cleaning.py
 |   |-- visualization.py
-|   `-- modeling.py
+|   |-- modeling.py
+|   `-- recommender.py
 |-- streamlit_app.py
 |-- requirements.txt
 `-- README.md
@@ -129,6 +134,12 @@ Run the ML extension after Step 1 outputs exist:
 
 ```powershell
 .conda-env\python.exe -m nbconvert --execute --inplace notebooks\03_success_prediction_ml.ipynb
+```
+
+Run the recommendation notebook:
+
+```powershell
+.conda-env\python.exe -m nbconvert --execute --inplace notebooks\04_movie_recommendation.ipynb
 ```
 
 Run the Streamlit dashboard:
@@ -185,6 +196,11 @@ ML extension outputs:
 - `outputs/figures/ml_threshold_tuning.png`
 - `outputs/figures/ml_cv_metrics.png`
 
+Recommendation outputs:
+
+- `outputs/recommendation_summary.md`
+- `outputs/sample_recommendations.csv`
+
 ## Analysis Modules
 
 ### 1. Commercial Success Analysis
@@ -218,4 +234,23 @@ The ML module includes:
 - Stratified 5-fold cross-validation
 - Feature importance and confusion matrix visualizations
 
-The current ML result should be presented as an exploratory audience-success model, not as a production-level or pure pre-release prediction system.
+The selected Random Forest operating threshold is `0.6`, based on the threshold-tuning result with the strongest F1-score among the tested thresholds.
+
+The model relies heavily on `popularity`, so it should be presented as an exploratory audience-success prediction model using platform attention information, not as a pure pre-release prediction system. The stricter comparison without `popularity` is included to show how predictive performance changes when that attention signal is removed.
+
+### 6. Movie Recommendation System
+
+Uses `movies_metadata.csv` and `keywords.csv` to build a content-based recommendation module. Each movie is represented as:
+
+```text
+content = genres + overview + keywords
+```
+
+TF-IDF converts the content text into numeric vectors, and cosine similarity ranks movies by content similarity. In Streamlit, users can choose a movie, select Top 5 / Top 10 / Top 15 recommendations, and view recommended movie title, similarity score, vote average, vote count, and main genre.
+
+Limitations:
+
+- Content similarity does not guarantee that a user will personally like a movie.
+- The first version does not use user history or personalized behavior.
+- Cold-start and individual preference problems are not fully solved.
+- `ratings_small.csv` can be used later for collaborative filtering.

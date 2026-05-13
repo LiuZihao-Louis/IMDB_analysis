@@ -19,26 +19,27 @@ Features include budget, runtime, popularity, release year, language, main genre
 Numeric missing values are handled with median imputation plus missing indicators, which is important because budget has many invalid or missing values.
 
 ## Model Comparison
-The best model by F1-score is Random Forest with accuracy 0.916, precision 0.366, recall 0.728, F1-score 0.487, ROC-AUC 0.948, and PR-AUC 0.491.
-Random Forest achieves precision 0.366, recall 0.728, F1-score 0.487, and PR-AUC 0.491.
+Using the selected threshold of 0.6, the best model by F1-score is Random Forest with accuracy 0.937, precision 0.446, recall 0.614, F1-score 0.516, ROC-AUC 0.948, and PR-AUC 0.491.
+Random Forest achieves precision 0.446, recall 0.614, F1-score 0.516, and PR-AUC 0.491 at threshold 0.6.
 This means it can identify many audience-successful movies, but precision is still limited because successful movies are rare.
 
 ## Popularity Feature Boundary
-The model with popularity uses platform attention information, so it should not be described as a pure pre-release prediction model.
-With popularity: F1 0.487, PR-AUC 0.491.
-Without popularity: F1 0.323, PR-AUC 0.254.
-The stricter model without popularity is useful as a conservative comparison.
+The model relies heavily on popularity, so it should be interpreted as an exploratory audience-success prediction model using platform attention information, not as a pure pre-release prediction model.
+With popularity: F1 0.516, PR-AUC 0.491.
+Without popularity: F1 0.349, PR-AUC 0.254.
+The stricter model without popularity is useful as a conservative comparison and shows that predictive performance becomes weaker when the attention signal is removed.
 
 ## Threshold Tuning
-Among the tested thresholds, 0.6 gives the highest F1-score (0.516).
+Among the tested thresholds, 0.6 gives the highest F1-score (0.516), so 0.6 is used as the selected final operating threshold.
 Lower thresholds favor recall, while higher thresholds favor precision.
 
 ## Cross-Validation
-Stratified 5-fold cross-validation for Random Forest gives mean F1 0.494 +/- 0.006 and mean PR-AUC 0.509 +/- 0.011.
+Stratified 5-fold cross-validation for Random Forest gives mean F1 0.525 +/- 0.015 and mean PR-AUC 0.509 +/- 0.011.
 This reduces dependence on a single train/test split.
 
 ## Feature Importance
 Top Random Forest features: popularity, runtime, missingindicator_budget, movie_age, release_year.
+The Random Forest feature importance is dominated by popularity, confirming that the model uses a strong audience-attention signal.
 Feature importance should be read as model association, not causal proof.
 
 ## Limitations

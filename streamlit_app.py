@@ -3,9 +3,9 @@
 Run from the project root:
     streamlit run streamlit_app.py
 
-This dashboard visualizes the cleaned EDA outputs and the optional
-audience-success prediction module. It does not include recommendation-system
-or LLM-related features.
+This dashboard visualizes the cleaned EDA outputs, the audience-success
+prediction module, and the content-based recommendation module. It does not
+include LLM-related features.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ import joblib
 import pandas as pd
 import streamlit as st
 
-from src.modeling import MODEL_FEATURES, REFERENCE_YEAR
+from src.modeling import MODEL_FEATURES, REFERENCE_YEAR, SELECTED_THRESHOLD
+from src.recommender import DEFAULT_KEYWORDS_PATH, DEFAULT_METADATA_PATH, build_content_recommender
 
 alt.data_transformers.disable_max_rows()
 
@@ -35,6 +36,10 @@ ML_THRESHOLD_PATH = OUTPUT_DIR / "ml_threshold_tuning.csv"
 ML_CV_PATH = OUTPUT_DIR / "ml_cross_validation_metrics.csv"
 ML_IMPORTANCE_PATH = OUTPUT_DIR / "ml_feature_importance.csv"
 ML_RANDOM_FOREST_PATH = OUTPUT_DIR / "models" / "random_forest.joblib"
+RECOMMENDATION_SUMMARY_PATH = OUTPUT_DIR / "recommendation_summary.md"
+SAMPLE_RECOMMENDATIONS_PATH = OUTPUT_DIR / "sample_recommendations.csv"
+METADATA_PATH = PROJECT_ROOT / DEFAULT_METADATA_PATH
+KEYWORDS_PATH = PROJECT_ROOT / DEFAULT_KEYWORDS_PATH
 
 KEY_COLUMNS = [
     "id",
@@ -81,6 +86,13 @@ def load_ml_summary_text() -> str:
 
 
 @st.cache_data(show_spinner=False)
+def load_recommendation_summary_text() -> str:
+    if RECOMMENDATION_SUMMARY_PATH.exists():
+        return RECOMMENDATION_SUMMARY_PATH.read_text(encoding="utf-8")
+    return ""
+
+
+@st.cache_data(show_spinner=False)
 def load_optional_csv(path: Path) -> pd.DataFrame:
     if path.exists():
         return pd.read_csv(path)
@@ -92,6 +104,11 @@ def load_random_forest_model():
     if ML_RANDOM_FOREST_PATH.exists():
         return joblib.load(ML_RANDOM_FOREST_PATH)
     return None
+
+
+@st.cache_resource(show_spinner=False)
+def load_content_recommender():
+    return build_content_recommender(METADATA_PATH, KEYWORDS_PATH)
 
 
 def money(value: float | int | None) -> str:
@@ -217,6 +234,7 @@ if not CLEANED_PATH.exists() or not FINANCIAL_PATH.exists():
 cleaned_movies, financial_movies = load_data()
 summary_text = load_summary_text()
 ml_summary_text = load_ml_summary_text()
+recommendation_summary_text = load_recommendation_summary_text()
 
 for frame in (cleaned_movies, financial_movies):
     for column in ["release_year", "budget", "revenue", "profit", "roi", "vote_average", "vote_count", "popularity"]:
@@ -234,7 +252,7 @@ with st.sidebar:
     selected_genres = st.multiselect("Main genre", genre_options)
     min_vote_count = st.slider("Minimum vote count", 0, 500, 20, step=10)
     st.divider()
-    st.caption("Dashboard uses movie-level metadata. Other CSV files remain reserved for later recommendation and richer ML extensions.")
+    st.caption("Dashboard uses movie-level metadata, keywords, and generated project outputs.")
 
 filtered_cleaned, filtered_financial = filtered_data(cleaned_movies, financial_movies, year_range, selected_genres)
 rating_filtered = filtered_cleaned[filtered_cleaned["vote_count"].fillna(0) >= min_vote_count].copy()
@@ -252,6 +270,7 @@ tabs = st.tabs(
         "Genre Performance",
         "Audience Response",
         "Time Trends",
+        "Movie Recommendation",
         "ML Prediction",
         "Summary",
     ]
@@ -279,7 +298,7 @@ with tabs[0]:
     with c3:
         insight_box(
             "Scope",
-            "The main dashboard presents Step 1 EDA results. The ML tab adds the planned audience-success prediction extension without recommendations or LLM features.",
+            "The dashboard presents Step 1 EDA, audience-success prediction, and a first content-based recommendation module without LLM features.",
         )
 
     st.markdown('<div class="section-title">Movie Count by Main Genre</div>', unsafe_allow_html=True)
@@ -575,13 +594,88 @@ with tabs[5]:
         st.altair_chart(chart, use_container_width=True)
 
 with tabs[6]:
+    st.subheader("Movie Recommendation System")
+    st.markdown("This module recommends movies based on genres, overview, and keywords.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        insight_box(
+            "Content-based logic",
+            "Each movie is represented by genres, overview, and keywords. TF-IDF converts that text into vectors, and cosine similarity finds nearby movies.",
+        )
+    with c2:
+        insight_box(
+            "Scope",
+            "This version does not use user history or collaborative filtering. It recommends content-similar movies, not guaranteed personal favorites.",
+        )
+
+    if not METADATA_PATH.exists() or not KEYWORDS_PATH.exists():
+        st.error("Recommendation data files are missing. Expected `data/movies_metadata.csv` and `data/keywords.csv`.")
+    else:
+        with st.spinner("Building content recommender..."):
+            try:
+                content_recommender, recommender_summary = load_content_recommender()
+            except Exception as exc:
+                content_recommender = None
+                recommender_summary = {}
+                st.error(f"Could not build recommender: {exc}")
+
+        if content_recommender is not None:
+            metric_cols = st.columns(3)
+            metric_cols[0].metric("Movies available", number(recommender_summary.get("recommendation_rows")))
+            metric_cols[1].metric("Movies with keywords", number(recommender_summary.get("movies_with_keywords")))
+            metric_cols[2].metric("TF-IDF features", number(recommender_summary.get("tfidf_features")))
+
+            movies_for_select = content_recommender.movies.copy()
+            movies_for_select["select_label"] = movies_for_select.apply(
+                lambda row: f"{row['display_title']} | {row['main_genre']} | id {int(row['movie_id'])}",
+                axis=1,
+            )
+            default_matches = movies_for_select[movies_for_select["title"].str.lower() == "star wars"]
+            default_index = int(default_matches.index[0]) if not default_matches.empty else 0
+
+            controls = st.columns([2, 1, 1])
+            with controls[0]:
+                selected_label = st.selectbox(
+                    "Choose a movie",
+                    movies_for_select["select_label"].tolist(),
+                    index=default_index,
+                )
+            with controls[1]:
+                top_n = st.selectbox("Recommendation count", [5, 10, 15], index=1)
+            with controls[2]:
+                st.write("")
+                st.write("")
+                recommend_clicked = st.button("Recommend Movies", type="primary")
+
+            selected_movie = movies_for_select.loc[movies_for_select["select_label"] == selected_label].iloc[0]
+            st.caption(
+                f"Selected movie: {selected_movie['title']} | Main genre: {selected_movie['main_genre']} | "
+                f"Vote average: {selected_movie['vote_average']:.1f}"
+            )
+
+            if recommend_clicked:
+                recommendations = content_recommender.recommend_by_id(int(selected_movie["movie_id"]), top_n=top_n)
+                st.dataframe(recommendations, hide_index=True, use_container_width=True)
+
+            sample_recommendations = load_optional_csv(SAMPLE_RECOMMENDATIONS_PATH)
+            if not sample_recommendations.empty:
+                with st.expander("Show saved sample recommendations"):
+                    st.dataframe(sample_recommendations, hide_index=True, use_container_width=True)
+
+    if recommendation_summary_text:
+        with st.expander("Show recommendation summary markdown"):
+            st.markdown(recommendation_summary_text)
+
+with tabs[7]:
     st.subheader("Machine Learning: Audience Success Prediction")
     st.markdown(
         """
         This module predicts `success_movie`, defined as `vote_average >= 7.0`
         and `vote_count >= 50`. The models use metadata features only, so
         `vote_average` and `vote_count` are excluded from the feature set to avoid label leakage.
-        The label measures audience response, not direct financial success.
+        The label measures audience response, not direct financial success. The reported Random Forest
+        classification metrics use the selected operating threshold of `0.6`.
         """
     )
 
@@ -617,10 +711,13 @@ with tabs[6]:
         with c3:
             insight_box(
                 "Popularity boundary",
-                "Popularity is useful but may reflect post-release attention, so the model is exploratory rather than pure pre-release prediction.",
+                "Random Forest relies heavily on popularity, so it is an exploratory model using platform attention information, not a pure pre-release prediction model.",
             )
 
         st.dataframe(ml_metrics.round(3), hide_index=True, use_container_width=True)
+        st.caption(
+            f"Classification metrics use threshold {SELECTED_THRESHOLD:.1f}. ROC-AUC and PR-AUC are threshold-independent ranking metrics."
+        )
 
         img_cols = st.columns(3)
         for image_col, image_name in zip(
@@ -704,7 +801,7 @@ with tabs[6]:
             threshold_choice = st.select_slider(
                 "Decision threshold",
                 options=[0.3, 0.4, 0.5, 0.6, 0.7],
-                value=0.6,
+                value=SELECTED_THRESHOLD,
             )
             if probability is not None:
                 result_cols = st.columns(2)
@@ -725,7 +822,7 @@ with tabs[6]:
         with st.expander("Show ML summary markdown"):
             st.markdown(ml_summary_text)
 
-with tabs[7]:
+with tabs[8]:
     st.subheader("Presentation Summary")
     st.markdown(
         """
@@ -746,5 +843,7 @@ with tabs[7]:
         {"Output": "ML metrics", "Path": "outputs/ml_model_metrics.csv", "Exists": ML_METRICS_PATH.exists()},
         {"Output": "ML summary", "Path": "outputs/ml_success_prediction_summary.md", "Exists": ML_SUMMARY_PATH.exists()},
         {"Output": "Random Forest model", "Path": "outputs/models/random_forest.joblib", "Exists": ML_RANDOM_FOREST_PATH.exists()},
+        {"Output": "Recommendation summary", "Path": "outputs/recommendation_summary.md", "Exists": RECOMMENDATION_SUMMARY_PATH.exists()},
+        {"Output": "Sample recommendations", "Path": "outputs/sample_recommendations.csv", "Exists": SAMPLE_RECOMMENDATIONS_PATH.exists()},
     ]
     st.dataframe(pd.DataFrame(output_rows), hide_index=True, use_container_width=True)
